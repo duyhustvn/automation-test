@@ -1,80 +1,151 @@
 import { createBdd } from 'playwright-bdd';
+import { expect, APIResponse } from '@playwright/test';
+import { getMongoCollection, getRedisClient, closeDbConnections } from '../utils/db';
 
-const { Given, When, Then } = createBdd();
+const { Given, When, Then, AfterAll } = createBdd();
 
+// Biến lưu trạng thái giữa các bước trong kịch bản
+let lastResponse: APIResponse;
+let currentProduct: { id: string; name: string; price: number };
 
-When('Tôi gửi yêu cầu GET tới {string}', async ({ }, arg) => {
-    // Step: When Tôi gửi yêu cầu GET tới "/health"
-    // From: features/product-api.feature:4:5
+AfterAll(async () => {
+  // Dọn dẹp kết nối Database sau khi hoàn tất toàn bộ test suite
+  await closeDbConnections();
 });
 
-Then('Mã trạng thái phản hồi phải là {int}', async ({ }, arg) => {
-    // Step: Then Mã trạng thái phản hồi phải là 200
-    // From: features/product-api.feature:5:5
+// ============================================================================
+// TC01: Health Check kiểm tra Server, MongoDB và Redis đều sẵn sàng
+// ============================================================================
+When('Tôi gửi yêu cầu GET tới {string}', async ({ request }, endpoint: string) => {
+  lastResponse = await request.get(endpoint);
 });
 
-Then('Trạng thái hệ thống phải là {string} với MongoDB và Redis sẵn sàng', async ({ }, arg) => {
-    // Step: And Trạng thái hệ thống phải là "ok" với MongoDB và Redis sẵn sàng
-    // From: features/product-api.feature:6:5
+Then('Mã trạng thái phản hồi phải là {int}', async ({}, statusCode: number) => {
+  expect(lastResponse.status()).toBe(statusCode);
 });
 
-When('Tôi gửi yêu cầu tạo sản phẩm với ID {string}, tên {string}, giá {int}', async ({ }, arg, arg1, arg2) => {
-    // Step: When Tôi gửi yêu cầu tạo sản phẩm với ID "prod_bdd_001", tên "Tai nghe BDD Sony", giá 6990000
-    // From: features/product-api.feature:9:5
+Then('Trạng thái hệ thống phải là {string} với MongoDB và Redis sẵn sàng', async ({}, expectedStatus: string) => {
+  const body = await lastResponse.json();
+  expect(body.status).toBe(expectedStatus);
+  expect(body.mongo).toBe(true);
+  expect(body.redis).toBe(true);
 });
 
-Then('Dữ liệu sản phẩm trả về phải khớp với thông tin vừa tạo', async ({ }) => {
-    // Step: And Dữ liệu sản phẩm trả về phải khớp với thông tin vừa tạo
-    // From: features/product-api.feature:11:5
+// ============================================================================
+// TC02: Tạo sản phẩm mới, kiểm tra đồng thời MongoDB và Redis
+// ============================================================================
+When('Tôi gửi yêu cầu tạo sản phẩm với ID {string}, tên {string}, giá {int}', async (
+  { request },
+  id: string,
+  name: string,
+  price: number
+) => {
+  // Dọn dẹp dữ liệu cũ (nếu có) để đảm bảo test có thể chạy lại nhiều lần (idempotent)
+  const mongoCol = await getMongoCollection();
+  await mongoCol.deleteOne({ _id: id });
+  const redis = getRedisClient();
+  await redis.del(`product:${id}`);
+
+  currentProduct = { id, name, price };
+  lastResponse = await request.post('/api/products', {
+    data: currentProduct,
+  });
 });
 
-Then('Sản phẩm với ID {string} phải tồn tại trong MongoDB với tên {string} và giá {int}', async ({ }, arg, arg1, arg2) => {
-    // Step: And Sản phẩm với ID "prod_bdd_001" phải tồn tại trong MongoDB với tên "Tai nghe BDD Sony" và giá 6990000
-    // From: features/product-api.feature:12:5
+Then('Dữ liệu sản phẩm trả về phải khớp với thông tin vừa tạo', async () => {
+  const body = await lastResponse.json();
+  expect(body.id).toBe(currentProduct.id);
+  expect(body.name).toBe(currentProduct.name);
+  expect(body.price).toBe(currentProduct.price);
 });
 
-Then('Sản phẩm với ID {string} phải tồn tại trong Redis cache và có TTL lớn hơn {int}', async ({ }, arg, arg1) => {
-    // Step: And Sản phẩm với ID "prod_bdd_001" phải tồn tại trong Redis cache và có TTL lớn hơn 0
-    // From: features/product-api.feature:13:5
+Then('Sản phẩm với ID {string} phải tồn tại trong MongoDB với tên {string} và giá {int}', async (
+  {},
+  id: string,
+  expectedName: string,
+  expectedPrice: number
+) => {
+  const mongoCol = await getMongoCollection();
+  const doc = await mongoCol.findOne({ _id: id });
+  expect(doc).not.toBeNull();
+  expect(doc?.name).toBe(expectedName);
+  expect(doc?.price).toBe(expectedPrice);
 });
 
-Given('Một sản phẩm đã tồn tại với ID {string}, tên {string}, giá {int}', async ({ }, arg, arg1, arg2) => {
-    // Step: Given Một sản phẩm đã tồn tại với ID "prod_cache_bdd", tên "Chuột BDD MX Master", giá 2100000
-    // From: features/product-api.feature:16:5
+Then('Sản phẩm với ID {string} phải tồn tại trong Redis cache và có TTL lớn hơn {int}', async (
+  {},
+  id: string,
+  minTtl: number
+) => {
+  const redis = getRedisClient();
+  const rawData = await redis.get(`product:${id}`);
+  expect(rawData).not.toBeNull();
+  const cached = JSON.parse(rawData!);
+  expect(cached.id).toBe(id);
+
+  const ttl = await redis.ttl(`product:${id}`);
+  expect(ttl).toBeGreaterThan(minTtl);
 });
 
-When('Tôi gửi yêu cầu lấy thông tin sản phẩm với ID {string}', async ({ }, arg) => {
-    // Step: When Tôi gửi yêu cầu lấy thông tin sản phẩm với ID "prod_cache_bdd"
-    // From: features/product-api.feature:17:5
+// ============================================================================
+// TC03: Kiểm tra cơ chế Cache Aside (Cache Hit và Cache Miss)
+// ============================================================================
+Given('Một sản phẩm đã tồn tại với ID {string}, tên {string}, giá {int}', async (
+  { request },
+  id: string,
+  name: string,
+  price: number
+) => {
+  // Dọn dẹp dữ liệu cũ trước khi nạp
+  const mongoCol = await getMongoCollection();
+  await mongoCol.deleteOne({ _id: id });
+  const redis = getRedisClient();
+  await redis.del(`product:${id}`);
+
+  currentProduct = { id, name, price };
+  lastResponse = await request.post('/api/products', { data: currentProduct });
+  expect(lastResponse.status()).toBe(201);
 });
 
-Then('Tiêu đề {string} trong phản hồi phải là {string}', async ({ }, arg, arg1) => {
-    // Step: And Tiêu đề "X-Cache" trong phản hồi phải là "HIT"
-    // From: features/product-api.feature:19:5
+When('Tôi gửi yêu cầu lấy thông tin sản phẩm với ID {string}', async ({ request }, id: string) => {
+  lastResponse = await request.get(`/api/products/${id}`);
 });
 
-When('Tôi xóa trực tiếp cache của sản phẩm {string} trong Redis', async ({ }, arg: string) => {
-    // Step: When Tôi xóa trực tiếp cache của sản phẩm "prod_cache_bdd" trong Redis
-    // From: features/product-api.feature:20:5
+Then('Tiêu đề {string} trong phản hồi phải là {string}', async ({}, headerName: string, expectedVal: string) => {
+  const headers = lastResponse.headers();
+  expect(headers[headerName.toLowerCase()]).toBe(expectedVal);
 });
 
-Then('Sản phẩm {string} phải được tự động nạp lại vào Redis cache', async ({ }, arg: string) => {
-    // Step: And Sản phẩm "prod_cache_bdd" phải được tự động nạp lại vào Redis cache
-    // From: features/product-api.feature:24:5
+When('Tôi xóa trực tiếp cache của sản phẩm {string} trong Redis', async ({}, id: string) => {
+  const redis = getRedisClient();
+  await redis.del(`product:${id}`);
+  const check = await redis.get(`product:${id}`);
+  expect(check).toBeNull();
 });
 
-When('Tôi gửi yêu cầu xóa sản phẩm với ID {string}', async ({ }, arg: string) => {
-    // Step: When Tôi gửi yêu cầu xóa sản phẩm với ID "prod_del_bdd"
-    // From: features/product-api.feature:28:5
+Then('Sản phẩm {string} phải được tự động nạp lại vào Redis cache', async ({}, id: string) => {
+  const redis = getRedisClient();
+  const check = await redis.get(`product:${id}`);
+  expect(check).not.toBeNull();
+  const parsed = JSON.parse(check!);
+  expect(parsed.id).toBe(id);
 });
 
-Then('Sản phẩm với ID {string} không còn tồn tại trong MongoDB', async ({ }, arg: string) => {
-    // Step: And Sản phẩm với ID "prod_del_bdd" không còn tồn tại trong MongoDB
-    // From: features/product-api.feature:30:5
+// ============================================================================
+// TC04: Xóa sản phẩm và xác minh biến mất ở cả MongoDB và Redis
+// ============================================================================
+When('Tôi gửi yêu cầu xóa sản phẩm với ID {string}', async ({ request }, id: string) => {
+  lastResponse = await request.delete(`/api/products/${id}`);
 });
 
-Then('Cache của sản phẩm {string} không còn tồn tại trong Redis', async ({ }, arg: string) => {
-    // Step: And Cache của sản phẩm "prod_del_bdd" không còn tồn tại trong Redis
-    // From: features/product-api.feature:31:5
+Then('Sản phẩm với ID {string} không còn tồn tại trong MongoDB', async ({}, id: string) => {
+  const mongoCol = await getMongoCollection();
+  const doc = await mongoCol.findOne({ _id: id });
+  expect(doc).toBeNull();
 });
 
+Then('Cache của sản phẩm {string} không còn tồn tại trong Redis', async ({}, id: string) => {
+  const redis = getRedisClient();
+  const check = await redis.get(`product:${id}`);
+  expect(check).toBeNull();
+});
