@@ -1,6 +1,8 @@
-# Dự án Demo: Backend REST API (Golang) + Automation Test (Playwright) có kiểm tra MongoDB & Redis
+# Dự án Demo: Backend REST API (Golang) + Automation Test (Playwright & Playwright BDD)
 
-Dự án này minh họa cách xây dựng một hệ thống backend chuẩn mực bằng **Golang**, tích hợp cơ sở dữ liệu **MongoDB** và bộ nhớ đệm **Redis (Cache-Aside pattern)** có xác thực (authentication), đồng thời áp dụng **Playwright** để viết bộ kiểm thử tự động hóa (E2E API Test) xác thực cả tầng HTTP lẫn tính toàn vẹn trạng thái trực tiếp trong Database & Cache.
+Dự án này minh họa cách xây dựng một hệ thống backend chuẩn mực bằng **Golang**, tích hợp cơ sở dữ liệu **MongoDB** và bộ nhớ đệm **Redis (Cache-Aside pattern)** có xác thực (authentication), đồng thời cung cấp song song **2 phong cách viết Automation Test** để bạn so sánh:
+1. **Playwright Chuẩn (Code-first / `.spec.ts`):** Viết trực tiếp mã TypeScript kiểm thử nhanh chóng và cô đọng.
+2. **Playwright BDD (Behavior-Driven Development / Gherkin `.feature`):** Viết kịch bản bằng ngôn ngữ tự nhiên để BA, PO, QA và Dev đều hiểu được, sau đó sinh mã và chạy bằng chính Playwright Test Runner.
 
 ---
 
@@ -16,97 +18,51 @@ Cả **MongoDB** và **Redis** đều được cấu hình với mật khẩu `c
 
 ---
 
-## 2. Cấu trúc thư mục
+## 2. Cấu trúc thư mục dự án
 
 ```
 automation-test/
-├── .gitignore                  # Bỏ qua binary, node_modules, reports, .env...
-├── docker-compose.yml          # Dựng container MongoDB và Redis (kèm password changeme)
-├── main.go                     # Mã nguồn Golang REST API (Gin + Mongo + Redis)
-├── go.mod / go.sum             # Go dependencies
-├── README.md                   # Hướng dẫn chi tiết
-└── e2e-tests/                  # Bộ Automation Test bằng Playwright
-    ├── package.json
-    ├── playwright.config.ts    # Cấu hình Playwright Test Runner
-    ├── .env.example            # File mẫu cấu hình môi trường
+├── .gitignore                      # Bỏ qua binary, node_modules, reports, .env...
+├── docker-compose.yml              # Dựng container MongoDB và Redis (kèm password changeme)
+├── main.go                         # Mã nguồn Golang REST API (Gin + Mongo + Redis)
+├── go.mod / go.sum                 # Go dependencies
+├── README.md                       # Hướng dẫn chi tiết
+└── e2e-tests/                      # Bộ Automation Test
+    ├── package.json                # Dependencies & scripts chạy test
+    ├── .env.example                # File mẫu cấu hình môi trường (committed)
+    ├── .env                        # Biến môi trường kết nối API, Mongo, Redis (ignored)
+    │
     ├── utils/
-    │   └── db.ts               # Helper kết nối trực tiếp MongoDB & Redis trong test
+    │   └── db.ts                   # Helper kết nối trực tiếp MongoDB & Redis trong test
+    │
+    ├── [PHONG CÁCH 1: PLAYWRIGHT CHUẨN]
+    ├── playwright.config.ts        # Cấu hình Playwright gốc
     └── tests/
-        └── product-api.spec.ts # Kịch bản kiểm thử API + Verify DB & Redis
+        └── product-api.spec.ts     # Kịch bản code-first truyền thống
+    │
+    ├── [PHONG CÁCH 2: PLAYWRIGHT BDD]
+    ├── playwright.bdd.config.ts    # Cấu hình Playwright BDD
+    ├── features/
+    │   └── product-api.feature     # Kịch bản Gherkin (ngôn ngữ tự nhiên)
+    └── steps/
+        └── product-api.steps.ts    # Step definitions thực thi các bước Gherkin
 ```
 
 ---
 
-## 3. Nội dung `docker-compose.yml`
+## 3. So sánh 2 phong cách kiểm thử
 
-```yaml
-services:
-  mongodb:
-    image: mongo:7
-    container_name: test-mongo
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: changeme
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
-  redis:
-    image: redis:7-alpine
-    container_name: test-redis
-    command: redis-server --requirepass changeme
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-volumes:
-  mongo_data:
-  redis_data:
-```
+| Tiêu chí | 1. Playwright Chuẩn (`tests/product-api.spec.ts`) | 2. Playwright BDD (`features/` + `steps/`) |
+| :--- | :--- | :--- |
+| **Hình thức** | Viết trực tiếp `test('TC02', async ({ request }) => { ... })` | Viết kịch bản `Scenario: ... Given ... When ... Then` trong file `.feature`, sau đó map vào `steps/*.steps.ts`. |
+| **Người đọc hiểu** | Chủ yếu là Dev và Automation QA biết đọc code. | Cả PO, BA, PM, Manual QA và khách hàng đều đọc và duyệt được kịch bản. |
+| **Bộ máy thực thi** | Playwright Test Runner gốc (`@playwright/test`). | `playwright-bdd` biên dịch kịch bản rồi chạy trên **chính Playwright Test Runner gốc**. |
+| **Báo cáo & Debug** | Đầy đủ UI Mode, Trace Viewer, HTML Report. | Giữ nguyên 100% UI Mode, Trace Viewer, HTML Report của Playwright, hiển thị chi tiết từng bước Given/When/Then. |
+| **Phù hợp khi** | Team kỹ thuật muốn viết test nhanh, ít tầng trung gian. | Dự án Agile cần thống nhất kịch bản nghiệp vụ làm tài liệu sống (Living Documentation). |
 
 ---
 
-## 4. Luồng nghiệp vụ của Backend (Golang)
-
-1. **`GET /health`**: Kiểm tra trạng thái kết nối tới MongoDB và Redis.
-2. **`POST /api/products`**:
-   - Nhận thông tin sản phẩm `{ id, name, price }`.
-   - Lưu trữ bền vững vào **MongoDB** (collection `products`).
-   - Ghi vào **Redis Cache** (`product:<id>`) với TTL = 10 phút.
-3. **`GET /api/products/:id` (Cache-Aside Pattern)**:
-   - **Lần 1 (Cache HIT):** Nếu có trong Redis, trả về ngay lập tức kèm header `X-Cache: HIT`.
-   - **Lần 2 (Cache MISS):** Nếu Redis không có, truy vấn MongoDB, nạp lại vào Redis rồi trả về kết quả kèm header `X-Cache: MISS`.
-4. **`DELETE /api/products/:id`**:
-   - Xóa tài liệu khỏi MongoDB.
-   - Xóa key khỏi Redis Cache.
-
----
-
-## 5. Kịch bản Automation Test (Playwright)
-
-Bộ kiểm thử trong [`e2e-tests/tests/product-api.spec.ts`](e2e-tests/tests/product-api.spec.ts) gồm 4 Test Case cốt lõi:
-
-* **TC01 - Health Check:** Gọi `GET /health`, kiểm tra status 200, Mongo & Redis sẵn sàng.
-* **TC02 - POST /api/products (API + State Verification):**
-  1. Gửi request tạo sản phẩm qua Playwright `request.post`.
-  2. Xác minh status code 201 và JSON trả về.
-  3. **Direct Mongo Assert:** Kết nối trực tiếp vào MongoDB qua driver `mongodb` (với tài khoản `admin:changeme`), truy vấn document vừa tạo và so khớp `name`, `price`.
-  4. **Direct Redis Assert:** Kết nối trực tiếp vào Redis qua `ioredis` (với auth `changeme`), kiểm tra key `product:<id>` tồn tại và kiểm tra TTL > 0.
-* **TC03 - GET Cache Hit / Miss:**
-  1. Gọi GET lần 1 -> Assert `X-Cache: HIT`.
-  2. Xóa trực tiếp key trong Redis bằng test suite (`redis.del`).
-  3. Gọi GET lần 2 -> Assert `X-Cache: MISS`.
-  4. Kiểm tra Redis đã được backend tự động nạp lại (repopulated) sau khi query MongoDB.
-* **TC04 - DELETE Product:**
-  1. Gọi API xóa sản phẩm.
-  2. Kiểm tra trực tiếp MongoDB xem record đã biến mất (`null`).
-  3. Kiểm tra trực tiếp Redis xem cache đã được dọn sạch (`null`).
-
----
-
-## 6. Hướng dẫn chạy thử nghiệm
+## 4. Hướng dẫn chạy thử nghiệm
 
 ### Bước 1: Khởi động MongoDB & Redis
 ```bash
@@ -117,18 +73,32 @@ docker compose up -d
 Server đã được cấu hình mặc định mật khẩu `changeme`:
 ```bash
 go run main.go
-# hoặc build binary rồi chạy:
-# go build -o server main.go && ./server
+# hoặc:
+# ./server
 ```
 
-### Bước 3: Chạy bộ Automation Test bằng Playwright
+### Bước 3: Chạy Kiểm thử
+
+Di chuyển vào thư mục test:
 ```bash
 cd e2e-tests
-npm install
-npm test
 ```
 
-### Xem báo cáo HTML trực quan:
+#### Cách 1: Chạy bộ test Playwright chuẩn (Code-first)
 ```bash
+npm test
+# Xem báo cáo HTML:
 npm run report
+```
+
+#### Cách 2: Chạy bộ test Playwright BDD (Gherkin)
+```bash
+npm run test:bdd
+# Xem báo cáo HTML của BDD:
+npm run report:bdd
+```
+
+#### Chạy giao diện tương tác UI Mode cho BDD:
+```bash
+npm run test:bdd:ui
 ```
