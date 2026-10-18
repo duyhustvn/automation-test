@@ -10,8 +10,8 @@ try {
 }
 
 const testDir = defineBddConfig({
-  features: 'features/**/*.feature',
-  steps: 'steps/**/*.steps.ts',
+  features: 'tests/bdd/features/**/*.feature',
+  steps: 'tests/bdd/steps/**/*.steps.ts',
   outputDir: '.features-gen',
 });
 

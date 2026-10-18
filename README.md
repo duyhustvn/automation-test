@@ -31,28 +31,28 @@ automation-test/
     ├── package.json                # Dependencies & scripts chạy test
     ├── .env.example                # File mẫu cấu hình môi trường (committed)
     ├── .env                        # Biến môi trường kết nối API, Mongo, Redis (ignored)
+    ├── playwright.config.ts        # Cấu hình Playwright chuẩn (chạy ./tests/standard)
+    ├── playwright.bdd.config.ts    # Cấu hình Playwright BDD (chạy ./tests/bdd)
     │
     ├── utils/
     │   └── db.ts                   # Helper kết nối trực tiếp MongoDB & Redis trong test
     │
-    ├── [PHONG CÁCH 1: PLAYWRIGHT CHUẨN]
-    ├── playwright.config.ts        # Cấu hình Playwright gốc
-    └── tests/
-        └── product-api.spec.ts     # Kịch bản code-first truyền thống
-    │
-    ├── [PHONG CÁCH 2: PLAYWRIGHT BDD]
-    ├── playwright.bdd.config.ts    # Cấu hình Playwright BDD
-    ├── features/
-    │   └── product-api.feature     # Kịch bản Gherkin (ngôn ngữ tự nhiên)
-    └── steps/
-        └── product-api.steps.ts    # Step definitions thực thi các bước Gherkin
+    └── tests/                      # Thư mục chứa toàn bộ kịch bản kiểm thử
+        ├── standard/               # [PHONG CÁCH 1: PLAYWRIGHT CHUẨN]
+        │   └── product-api.spec.ts # Kịch bản code-first truyền thống
+        │
+        └── bdd/                    # [PHONG CÁCH 2: PLAYWRIGHT BDD]
+            ├── features/
+            │   └── product-api.feature  # Kịch bản Gherkin (ngôn ngữ tự nhiên)
+            └── steps/
+                └── product-api.steps.ts # Step definitions thực thi các bước Gherkin
 ```
 
 ---
 
 ## 3. So sánh 2 phong cách kiểm thử
 
-| Tiêu chí | 1. Playwright Chuẩn (`tests/product-api.spec.ts`) | 2. Playwright BDD (`features/` + `steps/`) |
+| Tiêu chí | 1. Playwright Chuẩn (`tests/standard/product-api.spec.ts`) | 2. Playwright BDD (`tests/bdd/features/` + `steps/`) |
 | :--- | :--- | :--- |
 | **Hình thức** | Viết trực tiếp `test('TC02', async ({ request }) => { ... })` | Viết kịch bản `Scenario: ... Given ... When ... Then` trong file `.feature`, sau đó map vào `steps/*.steps.ts`. |
 | **Người đọc hiểu** | Chủ yếu là Dev và Automation QA biết đọc code. | Cả PO, BA, PM, Manual QA và khách hàng đều đọc và duyệt được kịch bản. |

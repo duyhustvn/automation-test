@@ -9,7 +9,7 @@ try {
 }
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: './tests/standard',
   timeout: 30000,
   expect: {
     timeout: 5000,
