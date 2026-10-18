@@ -1,6 +1,6 @@
 import { createBdd } from 'playwright-bdd';
 import { expect, APIResponse } from '@playwright/test';
-import { getMongoCollection, getRedisClient, closeDbConnections } from '../utils/db';
+import { getMongoCollection, getRedisClient, closeDbConnections } from '../../../utils/db';
 
 const { Given, When, Then, AfterAll } = createBdd();
 

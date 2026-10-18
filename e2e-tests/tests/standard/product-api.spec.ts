@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { getMongoCollection, getRedisClient, closeDbConnections } from '../utils/db';
+import { getMongoCollection, getRedisClient, closeDbConnections } from '../../utils/db';
 import { Collection, Document } from 'mongodb';
 import Redis from 'ioredis';
 
